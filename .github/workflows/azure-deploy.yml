@@ -48,4 +48,4 @@ jobs:
             npm install
             # If using PM2, restart the app or start if not running:
             pm2 restart app || pm2 start server.js --name form-app
-          overwrite: true 
+            rm -rf /home/***/form-app

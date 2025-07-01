@@ -3,7 +3,7 @@ name: Build and Deploy to Azure VM
 on:
   push:
     branches:
-      - develop  # adjust if you deploy from a different branch v1
+      - develop
 
 jobs:
   build-and-deploy:
@@ -16,7 +16,7 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v2
         with:
-          node-version: '22'  # use your desired Node.js version
+          node-version: '22'
 
       - name: Install dependencies
         run: npm install
@@ -24,18 +24,30 @@ jobs:
       - name: Build the project
         run: npm run build
 
-      # Copy the built files and server code to the VM using scp.
+      - name: Remove node_modules before deploy
+        run: rm -rf node_modules
+
+      - name: Clean remote folder before upload
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.VM_IP }}
+          username: ${{ secrets.VM_USERNAME }}
+          key: ${{ secrets.VM_PRIVATE_KEY }}
+          port: ${{ secrets.VM_PORT }}
+          script: |
+            rm -rf /home/${{ secrets.VM_USERNAME }}/form-app
+
       - name: Copy files to VM
         uses: appleboy/scp-action@master
         with:
           host: ${{ secrets.VM_IP }}
           username: ${{ secrets.VM_USERNAME }}
           key: ${{ secrets.VM_PRIVATE_KEY }}
-          port: ${{ secrets.VM_PORT }}  # optional if using default port 22, can be omitted
-          source: "."
-          target: "/home/${{ secrets.VM_USERNAME }}/form-app"  # adjust target path as needed
+          port: ${{ secrets.VM_PORT }}
+          source: "." # si quieres puedes cambiarlo por "build" o "dist" si aplica
+          target: "/home/${{ secrets.VM_USERNAME }}/form-app"
+          rm: true  # por si acaso, borra la carpeta remota antes
 
-      # Execute remote commands via SSH to install dependencies and restart the app.
       - name: Execute remote SSH commands
         uses: appleboy/ssh-action@master
         with:
@@ -45,7 +57,5 @@ jobs:
           port: ${{ secrets.VM_PORT }}
           script: |
             cd ~/form-app
-            npm install
-            # If using PM2, restart the app or start if not running:
-            pm2 restart app || pm2 start server.js --name form-app
-            rm -rf /home/***/form-app
+            npm install --omit=dev
+            pm2 restart form-app || pm2 start server.js --name form-app

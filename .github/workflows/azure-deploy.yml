@@ -1,0 +1,61 @@
+name: Build and Deploy to Azure VM
+
+on:
+  push:
+    branches:
+      - develop
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v2
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v2
+        with:
+          node-version: '22'
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Build the project
+        run: npm run build
+
+      - name: Remove node_modules before deploy
+        run: rm -rf node_modules
+
+      - name: Clean remote folder before upload
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.VM_IP }}
+          username: ${{ secrets.VM_USERNAME }}
+          key: ${{ secrets.VM_PRIVATE_KEY }}
+          port: ${{ secrets.VM_PORT }}
+          script: |
+            rm -rf /home/${{ secrets.VM_USERNAME }}/form-app
+
+      - name: Copy files to VM
+        uses: appleboy/scp-action@master
+        with:
+          host: ${{ secrets.VM_IP }}
+          username: ${{ secrets.VM_USERNAME }}
+          key: ${{ secrets.VM_PRIVATE_KEY }}
+          port: ${{ secrets.VM_PORT }}
+          source: "." # si quieres puedes cambiarlo por "build" o "dist" si aplica
+          target: "/home/${{ secrets.VM_USERNAME }}/form-app"
+          rm: true  # por si acaso, borra la carpeta remota antes
+
+      - name: Execute remote SSH commands
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.VM_IP }}
+          username: ${{ secrets.VM_USERNAME }}
+          key: ${{ secrets.VM_PRIVATE_KEY }}
+          port: ${{ secrets.VM_PORT }}
+          script: |
+            cd ~/form-app
+            npm install --omit=dev
+            pm2 restart form-app || pm2 start server.js --name form-app
